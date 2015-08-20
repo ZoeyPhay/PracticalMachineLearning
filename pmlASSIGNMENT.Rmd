@@ -1,0 +1,127 @@
+---
+title: "PracticalMachineLearning"
+output: html_document
+---
+
+### Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+### Data 
+
+The training data for this project are available here: 
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: 
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har.
+
+Load the data
+```{r, echo=TRUE}
+train <- read.csv("C:/Users/ZPhay/Desktop/Coursera/PracticalMachineLearning/PracticalMachineLearning/pml-training.csv", na.strings=c("#DIV/0!"), row.names = 1)
+test  <- read.csv("C:/Users/ZPhay/Desktop/Coursera/PracticalMachineLearning/PracticalMachineLearning/pml-testing.csv", na.strings=c("#DIV/0!"), row.names = 1)
+```
+
+```{r, echo=TRUE}
+dim(train)
+```
+Training data contains 19622 observations and 160 features..
+
+..and the distribution of the 5 measured stances A,B,C,D,E are:
+```{r,echo=TRUE}
+table(train$classe)
+```
+
+## Preliminary
+### Segregation of Training Set
+In order to validate model, training data is separated into training set
+
+
+Loading required library (pls install packages like randomForest, caret)
+```{r,echo=TRUE}
+library(caret)
+library(ggplot2)
+library(lattice)
+library(randomForest)
+```
+
+Seed is set at 123456 to reproduce the results below
+```{r,echo=TRUE}
+set.seed(123456)
+trainset <- createDataPartition(train$classe, p = 0.8, list = FALSE)
+Training <- train[trainset, ]
+Validation <- train[-trainset, ]
+```
+### Feature selection
+
+Tidy data.
+```{r,echo=TRUE}
+# exclude near zero variance
+nzvcol <- nearZeroVar(Training)
+Training <- Training[, -nzvcol]
+
+# exclude columns with more than 40% missing values 
+# exclude descriptive columns
+cntlength <- sapply(Training, function(x) {
+    sum(!(is.na(x) | x == ""))
+})
+nullcol <- names(cntlength[cntlength < 0.6 * length(Training$classe)])
+descriptcol <- c("X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", 
+    "cvtd_timestamp", "new_window", "num_window")
+excludecols <- c(descriptcol, nullcol)
+Training <- Training[, !names(Training) %in% excludecols]
+```
+
+### Model Train
+
+Random Forest Model is selected
+
+```{r,echo=TRUE}
+rfModel <- randomForest(classe ~ ., data = Training, importance = TRUE, ntrees = 10)
+```
+
+### Model Validation
+Test the model performance and cross validate it
+
+#### Training Set Accuracy
+```{r,echo=TRUE}
+ptraining <- predict(rfModel, Training)
+print(confusionMatrix(ptraining, Training$classe))
+```
+
+Model performs well, but to ensure there isn't overfitting, there is a need to cross validate
+
+#### Cross Validation
+```{r,echo=TRUE}
+pvalidation <- predict(rfModel, Validation)
+print(confusionMatrix(pvalidation, Validation$classe))
+```
+
+Accuracy is 99.5% (out of sample error is 5%), hence the model performs well
+
+### Test set prediction
+
+```{r,echo=TRUE}
+ptest <- predict(rfModel, test)
+ptest
+```
+
+### Submission
+
+```{r,echo=TRUE}
+answers <- as.vector(ptest)
+
+pml_write_files = function(x) {
+    n = length(x)
+    for (i in 1:n) {
+        filename = paste0("problem_id_", i, ".txt")
+        write.table(x[i], file = filename, quote = FALSE, row.names = FALSE, 
+            col.names = FALSE)
+    }
+}
+
+pml_write_files(answers)
+```
+
+        
